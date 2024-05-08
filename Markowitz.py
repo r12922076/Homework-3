@@ -66,7 +66,14 @@ class EqualWeightPortfolio:
         """
         TODO: Complete Task 1 Below
         """
+        
+        # Calculate equal weights
+        equal_weight = 1 / len(assets)
 
+        # Assign equal weights to the included assets
+        for asset in assets:
+            self.portfolio_weights[asset] = equal_weight
+        
         """
         TODO: Complete Task 1 Above
         """
@@ -117,6 +124,18 @@ class RiskParityPortfolio:
         """
         TODO: Complete Task 2 Below
         """
+
+        # Calculate rolling window volatility and inverse volatility
+        for i in range(self.lookback+1, len(df)):
+            # Calculate returns and covariance matrix for the lookback period
+            returns_window = df_returns[assets].iloc[i-self.lookback:i]
+            volatilities = returns_window.std()
+
+            inverse_volatility = 1 / volatilities
+
+            # Normalize the inverse volatility weights
+            weights = inverse_volatility / inverse_volatility.sum()
+            self.portfolio_weights.loc[df.index[i], assets] = weights
 
         """
         TODO: Complete Task 2 Above
@@ -192,8 +211,13 @@ class MeanVariancePortfolio:
 
                 # Sample Code: Initialize Decision w and the Objective
                 # NOTE: You can modify the following code
-                w = model.addMVar(n, name="w", ub=1)
-                model.setObjective(w.sum(), gp.GRB.MAXIMIZE)
+                w = model.addMVar(n, name="w", ub=1, lb=0)
+                
+                # Budget constraint: all investments sum up to 1
+                model.addConstr(w.sum() == 1, name="Budget_Constraint")
+
+                # Define objective function: Maximize expected utility
+                model.setObjective(mu @ w - gamma / 2 * (w @ Sigma @ w), gp.GRB.MAXIMIZE)
 
                 """
                 TODO: Complete Task 3 Below
