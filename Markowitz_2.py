@@ -9,6 +9,11 @@ import quantstats as qs
 import gurobipy as gp
 import warnings
 import argparse
+        
+
+from skopt import gp_minimize
+from skopt.space import Integer, Real
+from skopt.utils import use_named_args
 
 """
 Project Setup
@@ -55,7 +60,7 @@ class MyPortfolio:
     NOTE: You can modify the initialization function
     """
 
-    def __init__(self, price, exclude, lookback=50, gamma=0):
+    def __init__(self, price, exclude, lookback=236, gamma=0):
         self.price = price
         self.returns = price.pct_change().fillna(0)
         self.exclude = exclude
@@ -75,12 +80,61 @@ class MyPortfolio:
         TODO: Complete Task 4 Below
         """
 
+        for i in range(self.lookback + 1, len(self.returns)):
+            R_n = self.returns.copy()[assets].iloc[i - self.lookback : i]
+            self.portfolio_weights.loc[self.returns.index[i], assets] = self.mv_opt(
+                R_n, self.gamma
+            )
+
         """
         TODO: Complete Task 4 Above
         """
 
         self.portfolio_weights.ffill(inplace=True)
         self.portfolio_weights.fillna(0, inplace=True)
+
+    def mv_opt(self, R_n, gamma):
+        mu = R_n.mean().values
+        n = len(R_n.columns)
+
+        with gp.Env(empty=True) as env:
+            env.setParam("OutputFlag", 0)
+            env.setParam("DualReductions", 0)
+            env.start()
+            with gp.Model(env=env, name="portfolio") as model:
+
+                # Add variables: x[i] denotes the proportion of capital invested in stock i
+                w = model.addMVar(len(mu), name="w")
+
+                # Budget constraint: all investments sum up to 1
+                model.addConstr(w.sum() == 1, name="Budget_Constraint")
+
+                # Define objective function: Maximize expected utility
+                model.setObjective(mu @ w, gp.GRB.MAXIMIZE)
+
+                model.optimize()
+
+                # Check if the status is INF_OR_UNBD (code 4)
+                if model.status == gp.GRB.INF_OR_UNBD:
+                    print(
+                        "Model status is INF_OR_UNBD. Reoptimizing with DualReductions set to 0."
+                    )
+                elif model.status == gp.GRB.INFEASIBLE:
+                    # Handle infeasible model
+                    print("Model is infeasible.")
+                elif model.status == gp.GRB.INF_OR_UNBD:
+                    # Handle infeasible or unbounded model
+                    print("Model is infeasible or unbounded.")
+
+                if model.status == gp.GRB.OPTIMAL or model.status == gp.GRB.SUBOPTIMAL:
+                    # Extract the solution
+                    solution = []
+                    for i in range(n):
+                        var = model.getVarByName(f"w[{i}]")
+                        # print(f"w {i} = {var.X}")
+                        solution.append(var.X)
+
+                    return solution
 
     def calculate_portfolio_returns(self):
         # Ensure weights are calculated
