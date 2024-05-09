@@ -9,11 +9,6 @@ import quantstats as qs
 import gurobipy as gp
 import warnings
 import argparse
-        
-
-from skopt import gp_minimize
-from skopt.space import Integer, Real
-from skopt.utils import use_named_args
 
 """
 Project Setup
